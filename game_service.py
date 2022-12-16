@@ -11,8 +11,10 @@ import utils.helpers as helpers
 import asyncio
 from redis import Redis
 from rq import Queue
+from rq.registry import FailedJobRegistry
 import time
 from job import count_words_at_url
+from helpers import post_to_leaderboard
 
 from typing import Tuple, Optional
 from quart import Quart, jsonify, g, request, abort
@@ -73,17 +75,16 @@ async def close_connection(exception):
 
 
 
-def worker():
-    q = Queue(connection=Redis())
+def worker(user, gameresult, guessno):
     print("Working.......")
-    data = {'username':'Akash', 'is_won': 1, 'guess' : 4}
-    result = q.enqueue(count_words_at_url, 'http://127.0.0.1:3000/dummy', data)
-
-    print(result.result) #Here it will show none output as job is still going on
-    time.sleep(5)
-
-    print(result.result) #Prints the counted words
-
+    data = {'username':user, 'is_won': gameresult, 'guess' : guessno}
+    #result = q.enqueue(count_words_at_url, 'http://127.0.0.1:3000/dummy', data)
+    posted = post_to_leaderboard(data)
+    if posted == False:
+        queue = Queue(connection=Redis())
+        registry = FailedJobRegistry(queue=queue)
+        result = queue.enqueue(add_to_leaderboard, data, retry=Retry(max=3, interval=5))
+        
 
 # ----------------------------Routes---------------------------- #
 
@@ -91,17 +92,17 @@ def worker():
 async def home():
     """
     Home
-    
+
     This is just the welcome message.
     """
-    
+
     return helpers.jsonify_message("Welcome to game service.")
 
 @app.route("/wordle/start", methods=["POST"])
 async def start_game():
     """
     Start Game
-    
+
     Initializes a game. Returns the game ID if successful.
     """
     username = request.authorization.username
@@ -128,8 +129,8 @@ async def start_game():
 async def list_active_games():
     """
     List Active Games
-    
-    This generates a list of game IDs that are active. Games that ran out of attempts 
+
+    This generates a list of game IDs that are active. Games that ran out of attempts
     or games that have been won are not included in the list.
     """
     username = request.authorization.username
@@ -157,13 +158,13 @@ async def game_is_active(db_read, username, gameid) -> bool:
         return True
     else:
         return False
-        
+
 
 @app.route("/wordle/<string:gameid>/status", methods=["GET"])
 async def retrieve_game(gameid):
     """
     Retrieve Game
-    
+
     This displays the current state of a specified active game. It lists all the attempts, as well as,
     the details of how close the attempts are from the secret word. This also shows the number
     of attempts left before the game ends.
@@ -197,7 +198,7 @@ async def register_leaderboardservice():
 
     query = "SELECT url from client_url WHERE url=:url"
     existing_url = await db_read.fetch_one(query=query, values={"url":url})
-  
+
 
     if( not existing_url):
         try:
@@ -206,11 +207,11 @@ async def register_leaderboardservice():
             await db_write.execute(query=query, values=values)
             return "Call-back Url Registered", 200
         except sqlite3.IntegrityError as e:
-            abort(409, e)    
+            abort(409, e)
     else:
-        return "Client URL already exist", 403  
-    
-    
+        return "Client URL already exist", 403
+
+
 
 
 def calculate_game_status(guesses):
@@ -237,7 +238,7 @@ def calculate_game_status(guesses):
 async def make_guess(gameid, data: Guess):
     """
     Guess the Secret Word
-    
+
     This inserts a guess into the guesses table if the guess word is a valid word. If the
     guess is valid, it will show whether it is correct and display hints accordingly. It
     will also tell the player how many attempts they have left.
@@ -268,14 +269,14 @@ async def make_guess(gameid, data: Guess):
         except sqlite3.IntegrityError as e:
             # guesses are unique per game
             abort(409, e)
-        
+
         # grab the secret word
         query = """
                 SELECT secretWord AS secret_word FROM games WHERE gameid = :gameid
                 """
         app.logger.info(query), app.logger.warning(query)
         game = await db_read.fetch_one(query=query, values={"gameid": gameid})
-        secret_word = game.secret_word 
+        secret_word = game.secret_word
 
 
         query = """
@@ -293,21 +294,24 @@ async def make_guess(gameid, data: Guess):
 
         if is_correct:
             query = """
-                    UPDATE games 
+                    UPDATE games
                     SET isActive = 0, hasWon = 1
                     WHERE gameid = :gameid
                     """
             await db_write.execute(query=query, values={"gameid": gameid})
-            worker()
+
+            #Sending data to leaderboard via worker function
+            worker(username, 1, guesses["num_guesses"] )
+
             return helpers.jsonify_message(f"Correct! The answer was {secret_word}.")
         elif guesses["num_guesses"] == max_num_attempts and not is_correct:
             query = """
-                    UPDATE games 
+                    UPDATE games
                     SET isActive = 0
                     WHERE gameid = :gameid
                     """
             await db_write.execute(query=query, values={"gameid": gameid})
-            
+
             return helpers.jsonify_message(f"You have lost! You have made {max_num_attempts} incorrect attempts. The secret word was {secret_word}.")
         else:
             remaining_attempts = max_num_attempts - guesses["num_guesses"]

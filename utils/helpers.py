@@ -1,9 +1,10 @@
 # Helper functions:
+import requests
 
 def jsonify_message(message):
     return {"message": message}
 
-# For games: 
+# For games:
 def compare_guess(guess, secret_word):
     correct_letters = set()
     correct_indices = []
@@ -23,3 +24,12 @@ def check_guess(guess, secret_word):
     else:
         is_correct = False
     return is_correct
+
+def post_to_leaderboard(data):
+    try:
+        req = requests.post(url='http://127.0.0.1:3000/leaderboard/updateScore', json=data)
+        print(r.status_code)
+        return True
+    except requests.exceptions.HTTPError:
+        print('Queueing...')
+        return False

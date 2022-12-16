@@ -14,11 +14,11 @@ async def init_users_db():
 
     query = "DROP TABLE IF EXISTS user"
     await users_database.execute(query=query)
-    
+
     query = """
             CREATE TABLE user (
-                userid INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, 
-                username TEXT NOT NULL UNIQUE, 
+                userid INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                username TEXT NOT NULL UNIQUE,
                 pwd BLOB NOT NULL
             )
             """
@@ -40,7 +40,7 @@ async def init_games_db():
     query = "DROP TABLE IF EXISTS client_url"
     await games_database.execute(query=query)
 
-    query = """ 
+    query = """
             CREATE TABLE games (
                 gameid TEXT NOT NULL PRIMARY KEY ,
                 username TEXT NOT NULL,
@@ -62,22 +62,22 @@ async def init_games_db():
             """
     await games_database.execute(query=query)
 
-    query = """ 
+    query = """
             CREATE TABLE secret_word (
                 word TEXT PRIMARY KEY
             )
             """
     await games_database.execute(query=query)
 
-    query = """ 
+    query = """
             CREATE TABLE valid_words (
                 word TEXT PRIMARY KEY
             )
             """
     await games_database.execute(query=query)
 
-    query = """ CREATE TABLE client_url ( 
-        id INTEGER PRIMARY KEY, 
+    query = """ CREATE TABLE client_url (
+        id INTEGER PRIMARY KEY,
         url TEXT NOT NULL UNIQUE
         )
         """
@@ -96,13 +96,13 @@ async def init_games_db():
     await games_database.execute(query=query)
 
     print("Index Created.")
-    
+
 
 async def populate_tables():
     # Fill secret_word and valid_words with words from correct.json and valid.json:
     correct_json = open("share/correct.json")
     valid_json = open("share/valid.json")
-    
+
     print("Populating secret_word table...")
     query = """
             INSERT INTO secret_word (word) VALUES (:word)
@@ -121,10 +121,9 @@ async def populate_tables():
 
 
 def main():
-    asyncio.run(init_users_db()) 
+    asyncio.run(init_users_db())
     asyncio.run(init_games_db())
     asyncio.run(populate_tables())
 
 if __name__ == "__main__":
     main()
-

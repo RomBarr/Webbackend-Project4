@@ -1,7 +1,9 @@
 import redis
 import toml
 import os
-import httpx
+#import httpx
+import requests
+
 import utils.helpers as helpers
 from quart import Quart, jsonify, g, request, abort
 app = Quart(__name__)
@@ -21,14 +23,15 @@ print(port)
 # Registering call back url with game_service
 def register_url():
     #Generated Callback Url
-    call_back_url = 'http//' + url + ':' + port + '/leaderboard' 
+    call_back_url = 'http//' + url + ':' + port + '/leaderboard'
     print(call_back_url)
     #Sending Registering post request
-    response = httpx.post('http://tuffix-vm/gameservice_client_register_url', data = call_back_url)
+    #response = httpx.post('http://tuffix-vm/gameservice_client_register_url', data = call_back_url)
+    response = requests.post('http://tuffix-vm/gameservice_client_register_url', data = call_back_url)
     #Register Successfully
     if (response.status_code == 200):
         print(response.text)
-        
+
 
 
 @app.route("/dummy", methods=["POST"])
@@ -78,5 +81,6 @@ async def get_rankings():
 
 try:
     register_url()
-except httpx.HTTPError as exc:
+#except httpx.HTTPError as exc:
+except requests.HTTPError as exc:
     print(f"HTTP Exception for {exc.request.url} - {exc}")
